@@ -1,0 +1,28 @@
+{
+  "name": "sc-serverless-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "AwsCompileServiceCatalog.js",
+  "scripts": {
+    "test-bare": "node bin/test",
+    "test": "istanbul cover -x \"**/*.test.js\" bin/test",
+    "lint": "eslint . --cache"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.373.0"
+  },
+  "devDependencies": {
+    "eslint": "^5.13.0",
+    "eslint-config-airbnb": "^17.1.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-plugin-import": "^2.16.0",
+    "eslint-plugin-jsx-a11y": "^6.2.0",
+    "eslint-plugin-react": "^7.12.4",
+    "istanbul": "^0.4.5",
+    "jest-cli": "^24.0.0",
+    "mocha": "^5.2.0",
+    "serverless": "^1.36.3"
+  }
+}
