@@ -5,31 +5,9 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 
-// eslint-disable-next-line no-template-curly-in-string
-const cfProvisionedProductTemplate = {
-  Type: 'AWS::ServiceCatalog::CloudFormationProvisionedProduct',
-  Properties: {
-    ProvisioningParameters: [
-      { Key: 'BucketName', Value: 'ServerlessDeploymentBucket' },
-      { Key: 'BucketKey', Value: 'S3Key' },
-      { Key: 'FunctionName', Value: 'FunctionName' },
-      { Key: 'FunctionStage', Value: 'test' },
-      { Key: 'FunctionHandler', Value: 'Handler' },
-      { Key: 'FunctionRuntime', Value: 'Runtime' },
-      { Key: 'FunctionMemorySize', Value: 'MemorySize' },
-      { Key: 'FunctionTimeout', Value: 'Timeout' },
-      { Key: 'LambdaVersionSHA256', Value: 'CodeSha256' },
-    ],
-    ProvisioningArtifactName: 'ProvisioningArtifactName',
-    ProductId: 'ProductId',
-    ProvisionedProductName: { 'Fn::Sub': 'provisionServerless-${FunctionName}' },
-  },
-};
-
 class AwsCompileServiceCatalog {
   constructor(serverless, options) {
     this.serverless = serverless;
-
     this.options = options;
     const servicePath = this.serverless.config.servicePath || '';
     this.packagePath = this.serverless.service.package.path
@@ -38,7 +16,7 @@ class AwsCompileServiceCatalog {
 
     // key off the ServiceCatalog Product ID
     if ('scProductId' in this.serverless.service.provider) {
-      this.newFunction = cfProvisionedProductTemplate;
+      this.newFunction = this.getCfTemplate(options);
       this.hooks = {
         'before:package:finalize': () => BbPromise.bind(this)
           .then(this.compileFunctions),
@@ -46,10 +24,39 @@ class AwsCompileServiceCatalog {
 
       this.serverless.cli.log('AwsCompileServiceCatalog');
       // clear out any other aws plugins
-      this.serverless.pluginManager.hooks['package:compileEvents'].length = 0;
-      this.serverless.pluginManager.hooks['package:compileFunctions'].length = 0;
-      this.serverless.pluginManager.hooks['package:setupProviderConfiguration'].length = 0;
+      if (this.serverless.pluginManager.hooks['package:compileEvents']) {
+        this.serverless.pluginManager.hooks['package:compileEvents'].length = 0;
+      }
+      if (this.serverless.pluginManager.hooks['package:compileFunctions']) {
+        this.serverless.pluginManager.hooks['package:compileFunctions'].length = 0;
+      }
+      if (this.serverless.pluginManager.hooks['package:setupProviderConfiguration']) {
+        this.serverless.pluginManager.hooks['package:setupProviderConfiguration'].length = 0;
+      }
     }
+  }
+
+  getCfTemplate() {
+    let templateFile = path.join(__dirname, '../templates/cfProvisionProductTemplate.json');
+    if ('scProductTemplate' in this.serverless.service.provider
+      && this.serverless.service.provider.scProductTemplate.length > 0) {
+      templateFile = this.serverless.service.provider.scProductTemplate;
+    }
+    let templateJson;
+    let parsedTemplate;
+    try {
+      templateJson = fs.readFileSync(templateFile);
+    } catch (ex) {
+      this.serverless.cli.log('error reading template file:: ', templateFile);
+      process.exit(1);
+    }
+    try {
+      parsedTemplate = JSON.parse(templateJson);
+    } catch (ex) {
+      this.serverless.cli.log('error parsing template file');
+      process.exit(1);
+    }
+    return parsedTemplate;
   }
 
   compileFunctions() {
@@ -116,8 +123,9 @@ class AwsCompileServiceCatalog {
     this.setProvisioningParamValue('FunctionTimeout', Timeout);
     this.setProvisioningParamValue('FunctionRuntime', Runtime);
     this.setProvisioningParamValue('FunctionStage', this.provider.getStage());
-    this.newFunction.Properties.ProvisioningArtifactName = this.serverless.service.provider.scProductVersion;
-    this.newFunction.Properties.ProductId = this.serverless.service.provider.scProductId;
+    const serviceProvider = this.serverless.service.provider;
+    this.newFunction.Properties.ProvisioningArtifactName = serviceProvider.scProductVersion;
+    this.newFunction.Properties.ProductId = serviceProvider.scProductId;
     this.newFunction.Properties.ProvisionedProductName = `provisionSC-${functionObject.name}`;
 
     // publish these properties to the platform
@@ -131,7 +139,8 @@ class AwsCompileServiceCatalog {
         this.serverless.service.provider.tags,
         functionObject.tags,
       );
-      this.newFunction.Properties.Tags = Object.keys(tags).map(key => ({ Key: key, Value: tags[key] }));
+      this.newFunction.Properties.Tags = Object.keys(tags).map(key => (
+        { Key: key, Value: tags[key] }));
     }
 
     const fileHash = crypto.createHash('sha256');
@@ -150,9 +159,11 @@ class AwsCompileServiceCatalog {
         fileHash.end();
         const fileDigest = fileHash.read();
         this.setProvisioningParamValue('LambdaVersionSHA256', fileDigest);
-
+        // eslint-disable-next-line max-len
         const functionLogicalId = `${this.provider.naming.getNormalizedFunctionName(functionName)}SCProvisionedProduct`;
+        // eslint-disable-next-line max-len
         this.serverless.service.provider.compiledCloudFormationTemplate.Resources[functionLogicalId] = this.newFunction;
+        // eslint-disable-next-line max-len
         this.serverless.service.provider.compiledCloudFormationTemplate.Outputs.ProvisionedProductID = {
           Description: 'Provisioned product ID',
           Value: { Ref: functionLogicalId },
@@ -162,9 +173,10 @@ class AwsCompileServiceCatalog {
   }
 
   setProvisioningParamValue(key, value) {
-    const index = this.newFunction.Properties.ProvisioningParameters.findIndex(kv => kv.Key === key);
+    const index = this.newFunction.Properties.ProvisioningParameters
+      .findIndex(kv => kv.Key === key);
     if (index === -1) {
-      console.error(`object with Key=${key} not found in ProvisioningParameters!`);
+      this.serverless.cli.log(`object with Key=${key} not found in ProvisioningParameters!`);
       return;
     }
     this.newFunction.Properties.ProvisioningParameters[index].Value = value;
