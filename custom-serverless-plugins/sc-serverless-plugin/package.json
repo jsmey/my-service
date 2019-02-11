@@ -5,6 +5,7 @@
   "main": "src/AwsCompileServiceCatalog.js",
   "scripts": {
     "test": "mocha",
+    "test-coverage": "nyc --reporter=lcov mocha",
     "lint": "eslint . --cache"
   },
   "author": "",
@@ -21,8 +22,8 @@
     "eslint-plugin-import": "^2.16.0",
     "eslint-plugin-jsx-a11y": "^6.2.0",
     "eslint-plugin-react": "^7.12.4",
-    "istanbul": "^0.4.5",
     "mocha": "^5.2.0",
+    "nyc": "^13.2.0",
     "serverless": "^1.36.3"
   }
 }
