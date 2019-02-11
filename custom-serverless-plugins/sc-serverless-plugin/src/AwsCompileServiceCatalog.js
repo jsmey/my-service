@@ -37,7 +37,7 @@ class AwsCompileServiceCatalog {
   }
 
   getCfTemplate() {
-    let templateFile = path.join(__dirname, './cfProvisionProductTemplate.yml');
+    let templateFile = path.join(__dirname, './cfProvisionProductTemplate.json');
     if ('scProductTemplate' in this.serverless.service.provider
       && this.serverless.service.provider.scProductTemplate.length > 0) {
       templateFile = this.serverless.service.provider.scProductTemplate;
