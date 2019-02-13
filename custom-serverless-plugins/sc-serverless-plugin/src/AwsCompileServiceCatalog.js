@@ -16,12 +16,10 @@ class AwsCompileServiceCatalog {
 
     // key off the ServiceCatalog Product ID
     if ('scProductId' in this.serverless.service.provider) {
-      this.newFunction = this.getCfTemplate(options);
       this.hooks = {
         'before:package:finalize': () => BbPromise.bind(this)
           .then(this.compileFunctions),
       };
-
       this.serverless.cli.log('AwsCompileServiceCatalog');
       // clear out any other aws plugins
       if (this.serverless.pluginManager.hooks['package:compileEvents']) {
@@ -68,6 +66,16 @@ class AwsCompileServiceCatalog {
   }
 
   compileFunction(functionName) {
+    const newFunction = this.getCfTemplate();
+    const setProvisioningParamValue = (key, value) => {
+      const index = newFunction.Properties.ProvisioningParameters
+        .findIndex(kv => kv.Key === key);
+      if (index === -1) {
+        this.serverless.cli.log(`object with Key=${key} not found in ProvisioningParameters!`);
+        return;
+      }
+      newFunction.Properties.ProvisioningParameters[index].Value = value;
+    };
     const functionObject = this.serverless.service.getFunction(functionName);
     functionObject.package = functionObject.package || {};
 
@@ -87,7 +95,7 @@ class AwsCompileServiceCatalog {
         '.serverless', artifactFileName);
     }
     if (this.serverless.service.provider.deploymentBucket) {
-      this.setProvisioningParamValue('BucketName', this.serverless.service.provider.deploymentBucket);
+      setProvisioningParamValue('BucketName', this.serverless.service.provider.deploymentBucket);
     } else {
       const errorMessage = 'Missing provider.deploymentBucket parameter.'
         + ' Please make sure you provide a deployment bucket parameter. SC Provisioned Product cannot create an S3 Bucket.'
@@ -97,7 +105,7 @@ class AwsCompileServiceCatalog {
 
     const s3Folder = this.serverless.service.package.artifactDirectoryName;
     const s3FileName = artifactFilePath.split(path.sep).pop();
-    this.setProvisioningParamValue('BucketKey', `${s3Folder}/${s3FileName}`);
+    setProvisioningParamValue('BucketKey', `${s3Folder}/${s3FileName}`);
 
     if (!functionObject.handler) {
       const errorMessage = `Missing "handler" property in function "${functionName}".`
@@ -117,16 +125,16 @@ class AwsCompileServiceCatalog {
       || this.serverless.service.provider.runtime
       || 'nodejs4.3';
 
-    this.setProvisioningParamValue('FunctionHandler', functionObject.handler);
-    this.setProvisioningParamValue('FunctionName', functionObject.name);
-    this.setProvisioningParamValue('FunctionMemorySize', MemorySize);
-    this.setProvisioningParamValue('FunctionTimeout', Timeout);
-    this.setProvisioningParamValue('FunctionRuntime', Runtime);
-    this.setProvisioningParamValue('FunctionStage', this.provider.getStage());
+    setProvisioningParamValue('FunctionHandler', functionObject.handler);
+    setProvisioningParamValue('FunctionName', functionObject.name);
+    setProvisioningParamValue('FunctionMemorySize', MemorySize);
+    setProvisioningParamValue('FunctionTimeout', Timeout);
+    setProvisioningParamValue('FunctionRuntime', Runtime);
+    setProvisioningParamValue('FunctionStage', this.provider.getStage());
     const serviceProvider = this.serverless.service.provider;
-    this.newFunction.Properties.ProvisioningArtifactName = serviceProvider.scProductVersion;
-    this.newFunction.Properties.ProductId = serviceProvider.scProductId;
-    this.newFunction.Properties.ProvisionedProductName = `provisionSC-${functionObject.name}`;
+    newFunction.Properties.ProvisioningArtifactName = serviceProvider.scProductVersion;
+    newFunction.Properties.ProductId = serviceProvider.scProductId;
+    newFunction.Properties.ProvisionedProductName = `provisionSC-${functionObject.name}`;
 
     // publish these properties to the platform
     this.serverless.service.functions[functionName].memory = MemorySize;
@@ -139,7 +147,7 @@ class AwsCompileServiceCatalog {
         this.serverless.service.provider.tags,
         functionObject.tags,
       );
-      this.newFunction.Properties.Tags = Object.keys(tags).map(key => (
+      newFunction.Properties.Tags = Object.keys(tags).map(key => (
         { Key: key, Value: tags[key] }));
     }
 
@@ -158,11 +166,11 @@ class AwsCompileServiceCatalog {
         // Finalize hashes
         fileHash.end();
         const fileDigest = fileHash.read();
-        this.setProvisioningParamValue('LambdaVersionSHA256', fileDigest);
+        setProvisioningParamValue('LambdaVersionSHA256', fileDigest);
         // eslint-disable-next-line max-len
-        const functionLogicalId = `${this.provider.naming.getNormalizedFunctionName(functionName)}SCProvisionedProduct`;
+        const functionLogicalId = `${this.provider.naming.getLambdaLogicalId(functionName)}SCProvisionedProduct`;
         // eslint-disable-next-line max-len
-        this.serverless.service.provider.compiledCloudFormationTemplate.Resources[functionLogicalId] = this.newFunction;
+        this.serverless.service.provider.compiledCloudFormationTemplate.Resources[functionLogicalId] = newFunction;
         // eslint-disable-next-line max-len
         this.serverless.service.provider.compiledCloudFormationTemplate.Outputs.ProvisionedProductID = {
           Description: 'Provisioned product ID',
@@ -170,16 +178,6 @@ class AwsCompileServiceCatalog {
         };
         return BbPromise.resolve();
       });
-  }
-
-  setProvisioningParamValue(key, value) {
-    const index = this.newFunction.Properties.ProvisioningParameters
-      .findIndex(kv => kv.Key === key);
-    if (index === -1) {
-      this.serverless.cli.log(`object with Key=${key} not found in ProvisioningParameters!`);
-      return;
-    }
-    this.newFunction.Properties.ProvisioningParameters[index].Value = value;
   }
 }
 

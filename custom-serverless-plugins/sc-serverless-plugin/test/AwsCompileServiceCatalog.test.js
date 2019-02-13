@@ -17,8 +17,10 @@ describe('AwsCompileFunctions', () => {
   let serverless;
   let testProvider;
   let awsCompileServiceCatalog;
-  const functionName = 'test';
-  const compiledFunctionName = 'TestSCProvisionedProduct';
+  const functionNameHello = 'testHello';
+  const functionNameBye = 'testBye';
+  const productNameHello = 'TestHelloLambdaFunctionSCProvisionedProduct';
+  const productNameBye = 'TestByeLambdaFunctionSCProvisionedProduct';
 
   const setup = (providerProps) => {
     const options = { stage: 'dev', region: 'us-east-1' };
@@ -52,16 +54,23 @@ describe('AwsCompileFunctions', () => {
     awsCompileServiceCatalog.serverless.service.package
       .artifact = path.join(awsCompileServiceCatalog.packagePath, serviceArtifact);
     awsCompileServiceCatalog.serverless.service.functions = {};
-    awsCompileServiceCatalog.serverless.service.functions[functionName] = {
-      name: 'test',
+    awsCompileServiceCatalog.serverless.service.functions[functionNameHello] = {
+      name: 'test-hello',
       package: {
         artifact: path.join(awsCompileServiceCatalog.packagePath,
           individualArtifact),
       },
       handler: 'handler.hello',
     };
+    awsCompileServiceCatalog.serverless.service.functions[functionNameBye] = {
+      name: 'test-bye',
+      package: {
+        artifact: path.join(awsCompileServiceCatalog.packagePath,
+          individualArtifact),
+      },
+      handler: 'handler.bye',
+    };
   };
-
   describe('#constructor()', () => {
     it('should set the provider variable to an instance of AwsProvider', () => {
       setup();
@@ -74,10 +83,10 @@ describe('AwsCompileFunctions', () => {
       return expect(awsCompileServiceCatalog.compileFunctions()).to.be.fulfilled
         .then(() => {
           const functionResource = awsCompileServiceCatalog.serverless.service.provider
-            .compiledCloudFormationTemplate.Resources[compiledFunctionName];
+            .compiledCloudFormationTemplate.Resources[productNameHello];
           expect(functionResource.Type).to.equal('AWS::ServiceCatalog::CloudFormationProvisionedProduct');
           expect(functionResource.Properties.ProductId).to.equal(testProvider.scProductId);
-          expect(functionResource.Properties.ProvisionedProductName).to.equal('provisionSC-test');
+          expect(functionResource.Properties.ProvisionedProductName).to.equal('provisionSC-test-hello');
         });
     });
     it('should override the template when the template', () => {
@@ -92,10 +101,22 @@ describe('AwsCompileFunctions', () => {
       return expect(awsCompileServiceCatalog.compileFunctions()).to.be.fulfilled
         .then(() => {
           const functionResource = awsCompileServiceCatalog.serverless.service.provider
-            .compiledCloudFormationTemplate.Resources[compiledFunctionName];
+            .compiledCloudFormationTemplate.Resources[productNameHello];
           expect(functionResource.Type).to.equal('AWS::ServiceCatalog::CloudFormationProvisionedProduct');
           const param = functionResource.Properties.ProvisioningParameters.find(k => k.Key === 'CustomParam');
           expect(param).to.deep.equal(customParam);
+        });
+    });
+    it('should set the handle multiple handlers', () => {
+      setup();
+      return expect(awsCompileServiceCatalog.compileFunctions()).to.be.fulfilled
+        .then(() => {
+          let functionResource = awsCompileServiceCatalog.serverless.service.provider
+            .compiledCloudFormationTemplate.Resources[productNameHello];
+          expect(functionResource.Properties.ProvisionedProductName).to.equal('provisionSC-test-hello');
+          functionResource = awsCompileServiceCatalog.serverless.service.provider
+            .compiledCloudFormationTemplate.Resources[productNameBye];
+          expect(functionResource.Properties.ProvisionedProductName).to.equal('provisionSC-test-bye');
         });
     });
   });
